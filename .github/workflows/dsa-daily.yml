@@ -1,0 +1,224 @@
+name: DSA Daily Upload
+
+on:
+  schedule:
+    # 8:30 PM IST = 3:00 PM UTC
+    - cron: "0 15 * * *"
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  upload-one-file:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Upload exactly one DSA file
+        shell: pwsh
+        run: |
+          $sourceRoot = Join-Path $env:GITHUB_WORKSPACE "source"
+          $cRoot = Join-Path $env:GITHUB_WORKSPACE "C"
+          $cppRoot = Join-Path $env:GITHUB_WORKSPACE "C++"
+
+          New-Item -ItemType Directory -Force -Path $cRoot | Out-Null
+          New-Item -ItemType Directory -Force -Path $cppRoot | Out-Null
+
+          function Get-Hash($file) {
+              (Get-FileHash -Algorithm SHA256 -Path $file.FullName).Hash
+          }
+
+          function Get-RelativePath($base, $path) {
+              $baseFull = [System.IO.Path]::GetFullPath($base)
+              $pathFull = [System.IO.Path]::GetFullPath($path)
+
+              if (-not $baseFull.EndsWith([System.IO.Path]::DirectorySeparatorChar)) {
+                  $baseFull += [System.IO.Path]::DirectorySeparatorChar
+              }
+
+              $uriBase = New-Object System.Uri($baseFull)
+              $uriPath = New-Object System.Uri($pathFull)
+
+              [System.Uri]::UnescapeDataString(
+                  $uriBase.MakeRelativeUri($uriPath).ToString()
+              ).Replace("/", "\")
+          }
+
+          Write-Host "=========================================="
+          Write-Host "DSA CLOUD DAILY UPLOADER"
+          Write-Host "=========================================="
+
+          # ------------------------------------------------------------
+          # 1. Find all C and C++ source files
+          # ------------------------------------------------------------
+
+          $sourceFiles = @(
+              Get-ChildItem -Path $sourceRoot -File -Recurse |
+              Where-Object {
+                  $_.Extension -in ".c", ".cpp", ".cc", ".cxx"
+              }
+          )
+
+          if ($sourceFiles.Count -eq 0) {
+              Write-Host "No source files found."
+              exit 0
+          }
+
+          # ------------------------------------------------------------
+          # 2. Build hashes of EVERYTHING already published
+          #    This catches duplicates even if filenames are different.
+          # ------------------------------------------------------------
+
+          $publishedFiles = @(
+              Get-ChildItem -Path $cRoot, $cppRoot -File -Recurse -ErrorAction SilentlyContinue
+          )
+
+          $publishedHashes = @{}
+
+          foreach ($file in $publishedFiles) {
+              $hash = Get-Hash $file
+
+              if (-not $publishedHashes.ContainsKey($hash)) {
+                  $publishedHashes[$hash] = $file.FullName
+              }
+          }
+
+          # ------------------------------------------------------------
+          # 3. Remove duplicate source files by CONTENT HASH
+          # ------------------------------------------------------------
+
+          $uniqueC = @{}
+          $uniqueCpp = @{}
+
+          foreach ($file in $sourceFiles) {
+
+              $hash = Get-Hash $file
+
+              if ($publishedHashes.ContainsKey($hash)) {
+                  Write-Host "Already published / duplicate:"
+                  Write-Host "  $($file.FullName)"
+                  continue
+              }
+
+              if ($file.Extension -eq ".c") {
+
+                  if (-not $uniqueC.ContainsKey($hash)) {
+                      $uniqueC[$hash] = $file
+                  }
+                  else {
+                      Write-Host "Duplicate C content skipped:"
+                      Write-Host "  $($file.FullName)"
+                  }
+
+              }
+              else {
+
+                  if (-not $uniqueCpp.ContainsKey($hash)) {
+                      $uniqueCpp[$hash] = $file
+                  }
+                  else {
+                      Write-Host "Duplicate C++ content skipped:"
+                      Write-Host "  $($file.FullName)"
+                  }
+              }
+          }
+
+          # ------------------------------------------------------------
+          # 4. C FIRST
+          #    Sort by original folder path.
+          # ------------------------------------------------------------
+
+          $cCandidates = @(
+              $uniqueC.Values |
+              Sort-Object FullName
+          )
+
+          $cppCandidates = @(
+              $uniqueCpp.Values |
+              Sort-Object FullName
+          )
+
+          $selected = $null
+          $language = $null
+
+          if ($cCandidates.Count -gt 0) {
+              $selected = $cCandidates[0]
+              $language = "C"
+          }
+          elseif ($cppCandidates.Count -gt 0) {
+              $selected = $cppCandidates[0]
+              $language = "C++"
+          }
+
+          # ------------------------------------------------------------
+          # 5. Stop if everything has already been published
+          # ------------------------------------------------------------
+
+          if ($null -eq $selected) {
+              Write-Host ""
+              Write-Host "No new files to publish."
+              Write-Host "All available files are already uploaded or duplicates."
+              exit 0
+          }
+
+          # ------------------------------------------------------------
+          # 6. Preserve topic/folder structure
+          # ------------------------------------------------------------
+
+          $relativePath = Get-RelativePath $sourceRoot $selected.FullName
+
+          if ($language -eq "C") {
+              $destinationRoot = $cRoot
+          }
+          else {
+              $destinationRoot = $cppRoot
+          }
+
+          $destination = Join-Path $destinationRoot $relativePath
+
+          $destinationDirectory = Split-Path $destination -Parent
+
+          New-Item -ItemType Directory -Force -Path $destinationDirectory | Out-Null
+
+          # ------------------------------------------------------------
+          # 7. Copy EXACTLY ONE file
+          # ------------------------------------------------------------
+
+          Copy-Item $selected.FullName $destination -Force
+
+          Write-Host ""
+          Write-Host "SELECTED EXACTLY ONE FILE"
+          Write-Host "Language : $language"
+          Write-Host "Source   : $relativePath"
+          Write-Host "GitHub   : $(
+              if ($language -eq "C") {
+                  "C/$relativePath"
+              }
+              else {
+                  "C++/$relativePath"
+              }
+          )"
+
+          # ------------------------------------------------------------
+          # 8. Commit and push exactly that one published file
+          # ------------------------------------------------------------
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -- "$destination"
+
+          git commit -m "Add $language solution: $($selected.Name)"
+
+          git push
+
+          Write-Host ""
+          Write-Host "SUCCESS: Exactly ONE file was pushed."
+          Write-Host "Language: $language"
+          Write-Host "File: $relativePath"

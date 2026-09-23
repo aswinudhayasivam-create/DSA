@@ -1,3 +1,8 @@
-﻿.dsa-automation/
+*.exe
+*.out
+*.obj
+*.o
+*.class
 .DS_Store
 ._*
+.dsa-automation/

@@ -2,7 +2,8 @@
 using namespace std;
 
 struct Triplet {
-    int row, col, value;
+    int row, col;
+    long long value;
 };
 
 int toSparse(int mat[][20], int rows, int cols, Triplet sparse[]) {
@@ -27,7 +28,7 @@ int addSparse(Triplet a[], int na, Triplet b[], int nb, Triplet result[]) {
     int i = 0, j = 0, k = 0;
     while(i < na && j < nb) {
         if(a[i].row == b[j].row && a[i].col == b[j].col) {
-            int sum = a[i].value + b[j].value;
+            long long sum = a[i].value + b[j].value;
             if(sum != 0) result[k++] = { a[i].row, a[i].col, sum };
             i++; j++;
         }
@@ -46,19 +47,28 @@ int addSparse(Triplet a[], int na, Triplet b[], int nb, Triplet result[]) {
 int main() {
     int rows, cols;
     cout << "Enter the number of rows and coloums : ";
-    cin >> rows >> cols;
+    if(!(cin >> rows >> cols) || rows < 1 || rows > 20 || cols < 1 || cols > 20) {
+        cout << "Rows and columns must be between 1 and 20." << endl;
+        return 1;
+    }
 
     int matA[20][20], matB[20][20];
 
     cout << "Enter elements of matrix A : ";
     for(int i = 0; i < rows; i++)
         for(int j = 0; j < cols; j++)
-            cin >> matA[i][j];
+            if(!(cin >> matA[i][j])) {
+                cout << "Invalid matrix element." << endl;
+                return 1;
+            }
 
     cout << "Enter elements of matrix B : ";
     for(int i = 0; i < rows; i++)
         for(int j = 0; j < cols; j++)
-            cin >> matB[i][j];
+            if(!(cin >> matB[i][j])) {
+                cout << "Invalid matrix element." << endl;
+                return 1;
+            }
 
     Triplet sparseA[400], sparseB[400], sparseC[400];
     int na = toSparse(matA, rows, cols, sparseA);

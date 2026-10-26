@@ -69,12 +69,18 @@ int main() {
 
     int n;
     cout << "Enter the number of elements to push: ";
-    cin >> n;
+    if(!(cin >> n) || n < 0 || n > MAX) {
+        cout << "Number of elements must be between 0 and " << MAX << "." << endl;
+        return 1;
+    }
 
     for(int i = 0; i < n; i++) {
         int x;
         cout << "Enter element " << i + 1 << ": ";
-        cin >> x;
+        if(!(cin >> x)) {
+            cout << "Invalid element." << endl;
+            return 1;
+        }
         s.push(x);
     }
 

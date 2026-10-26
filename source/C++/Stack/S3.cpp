@@ -1,4 +1,5 @@
 #include<iostream>
+#include<new>
 using namespace std;
 
 struct Node {
@@ -16,12 +17,24 @@ public:
         top = nullptr;
     }
 
+    ~Stack() {
+        while(top != nullptr) {
+            Node* temp = top;
+            top = top->next;
+            delete temp;
+        }
+    }
+
+    // This stack owns its nodes; copying would share and delete them twice.
+    Stack(const Stack&) = delete;
+    Stack& operator=(const Stack&) = delete;
+
     bool isEmpty() {
         return top == nullptr;
     }
 
     void push(int value) {
-        Node* newnode = new Node();
+        Node* newnode = new (nothrow) Node();
         if(newnode == nullptr) {
             cout << "Overflow!" << endl;
             return;

@@ -3,7 +3,7 @@ using namespace std;
 
 struct Term{
     int exp;
-    int coeff;
+    long long coeff;
 };
 
 Term poly[100];
@@ -27,6 +27,11 @@ void addTerm(Term t)
     }
 
     
+    if(termCount == 100) {
+        cout << "Polynomial is full." << endl;
+        return;
+    }
+
     int pos = termCount;
     while(pos > 0 && poly[pos-1].exp < t.exp) 
     {
@@ -58,13 +63,19 @@ int main()
 {
     int n;
     cout << "Enter the number of terms: ";
-    cin >> n;
+    if(!(cin >> n) || n < 0 || n > 100) {
+        cout << "Number of terms must be between 0 and 100." << endl;
+        return 1;
+    }
     
     cout << "Enter the exponent and coefficient for each term:" << endl;
     for(int i = 0; i < n; i++)
     {
         int exp, coeff;
-        cin >> exp >> coeff;
+        if(!(cin >> exp >> coeff)) {
+            cout << "Invalid exponent or coefficient." << endl;
+            return 1;
+        }
         addTerm(initTerm(exp, coeff));
     }
     
